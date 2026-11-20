@@ -372,6 +372,90 @@ end
     @test all(g)
 end
 
+# The bytes of this process in physical memory, on Linux.
+function resident_bytes()
+    GC.gc()
+    pages = parse(Int, split(read("/proc/self/statm", String))[2])
+    return pages * ccall(:getpagesize, Cint, ())
+end
+
+@testset "release_memory" begin
+    model = load_test_model("ad_memory")
+    N = 1_000_000
+    mu = [0.25]
+    x = range(0, 1, length = N)
+    threads = 1:(Threads.nthreads(:interactive)+Threads.nthreads(:default))
+    @test length(threads) > 1
+    on_thread(f, tid) = fetch(BridgeStan._on_thread(f, tid))
+    gradients() = [
+        on_thread(() -> BridgeStan.log_density_gradient(model, mu), tid) for tid in threads
+    ]
+
+    # Only the threads that loaded the library or constructed the model have
+    # autodiff memory in it yet.
+    if Sys.islinux() || Sys.isapple()
+        outcomes = BridgeStan.release_memory(model)
+        @test length(outcomes) == length(threads)
+        @test all(in((:released, :unused)), outcomes)
+        @test count(==(:unused), outcomes) >= length(threads) - 2
+    end
+
+    base = Sys.islinux() ? resident_bytes() : 0
+    before = gradients()
+    @test all(lp_grad -> lp_grad[1] ≈ -0.5 * sum(abs2, mu[1] .+ x), before)
+    @test all(lp_grad -> lp_grad[2] ≈ [-sum(mu[1] .+ x)], before)
+    grown = Sys.islinux() ? resident_bytes() : 0
+
+    if !(Sys.islinux() || Sys.isapple())
+        @test_throws ErrorException BridgeStan.release_memory(model)
+        return
+    end
+    @test BridgeStan.release_memory(model) == fill(:released, length(threads))
+    if Sys.islinux()
+        released = resident_bytes()
+        # Each thread recorded N variables, which take well over 32 bytes each.
+        @test grown - base > 32 * N * length(threads)
+        # Nearly all of that memory is handed back.
+        @test released - base < (grown - base) / 10
+    end
+
+    # The memory is used again, with the same results.
+    @test gradients() == before
+    @test BridgeStan.release_memory(model) == fill(:released, length(threads))
+end
+
+# Called when the model prints: asks to release the autodiff memory that the
+# calculation in progress is using.
+const PRINT_RELEASE = Ref(C_NULL)
+const PRINT_RELEASE_CODES = Cint[]
+function release_on_print(::Ptr{UInt8}, ::Csize_t)::Cvoid
+    err = Ref{Cstring}()
+    push!(PRINT_RELEASE_CODES, @ccall $(PRINT_RELEASE[])(err::Ref{Cstring})::Cint)
+    return nothing
+end
+
+@testset "release_memory during a calculation" begin
+    bridgestan = BridgeStan.get_bridgestan_path()
+    lib = joinpath(bridgestan, "test_models/print/print_model.so")
+    model = BridgeStan.StanModel(lib, ""; warn = false)
+    PRINT_RELEASE[] = Base.Libc.Libdl.dlsym(model.lib, :bs_release_memory)
+    set_print = Base.Libc.Libdl.dlsym(model.lib, :bs_set_print_callback)
+    set_print_callback(callback) =
+        @ccall $set_print(callback::Ptr{Cvoid}, C_NULL::Ptr{Cstring})::Cint
+
+    @test set_print_callback(@cfunction(release_on_print, Cvoid, (Ptr{UInt8}, Csize_t))) ==
+          0
+    try
+        @test BridgeStan.log_density_gradient(model, [0.2])[2] ≈ [-0.2]
+    finally
+        @test set_print_callback(C_NULL) == 0
+    end
+    # Each print was refused, changing nothing.
+    @test !isempty(PRINT_RELEASE_CODES)
+    @test all(==(2), PRINT_RELEASE_CODES)
+    @test BridgeStan.log_density_gradient(model, [0.2])[2] ≈ [-0.2]
+end
+
 
 @testset "jacobian model tests" begin
 

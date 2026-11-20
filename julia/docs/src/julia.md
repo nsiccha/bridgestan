@@ -81,6 +81,7 @@ log_density
 log_density_gradient
 log_density_hessian
 log_density_hessian_vector_product
+release_memory
 param_constrain
 param_unconstrain
 param_unconstrain_json

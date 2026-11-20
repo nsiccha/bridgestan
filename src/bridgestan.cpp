@@ -126,6 +126,35 @@ int bs_log_density_hessian_vector_product(const bs_model* m, bool propto,
   });
 }
 
+int bs_release_memory(char** error_msg) {
+  return handle_errors("release_memory", error_msg, [&]() {
+    // A thread gets its autodiff memory with its first calculation
+    // (BRIDGESTAN_PREPARE_AD_FOR_THREADING); one without has nothing to
+    // hand back, and creating its memory now would only allocate it.
+    if (stan::math::ChainableStack::instance_ == nullptr) {
+      return 1;
+    }
+    try {
+      if (!stan::math::release_memory()) {
+#if defined(__linux__) || defined(__APPLE__)
+        throw std::runtime_error(
+            "a system call failed to hand the autodiff memory back to the "
+            "operating system");
+#else
+        throw std::runtime_error(
+            "only Linux and macOS can hand the autodiff memory back to the "
+            "operating system");
+#endif
+      }
+    } catch (const std::logic_error&) {
+      // stan::math::release_memory() refuses, changing nothing, while a
+      // calculation on this thread has anything on the autodiff stack.
+      return 2;
+    }
+    return 0;
+  });
+}
+
 bs_rng* bs_rng_construct(unsigned int seed, char** error_msg) {
   return handle_errors("construct_rng", error_msg,
                        [&]() { return new bs_rng(seed); });

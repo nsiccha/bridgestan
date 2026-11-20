@@ -378,6 +378,43 @@ BS_PUBLIC int bs_log_density_hessian_vector_product(
     const double* vector, double* val, double* hvp, char** error_msg);
 
 /**
+ * Hand the memory that the calling thread keeps for automatic
+ * differentiation back to the operating system.
+ *
+ * Each gradient, Hessian or Hessian-vector product is recorded in the
+ * calling thread's autodiff memory. Afterwards that memory is emptied
+ * but kept for the next calculation, so a thread holds the memory of
+ * the largest calculation it has done for as long as it lives. This
+ * function tells the operating system that this memory holds nothing
+ * worth keeping, so the system takes its physical memory back now.
+ * Nothing is freed: the next calculation on this thread uses the same
+ * memory again, and each page it writes again costs one page fault.
+ * Results are unchanged.
+ *
+ * Each model library has its own autodiff memory, so this acts on the
+ * memory of the library it is called from, and not on that of other
+ * model libraries. In a library compiled with `STAN_THREADS`, each
+ * thread has its own autodiff memory, and this acts on the calling
+ * thread's only: call it from every thread whose memory should be
+ * handed back. Otherwise, one autodiff memory serves the whole process;
+ * call it only while no thread uses the library.
+ *
+ * Only Linux and macOS support this.
+ *
+ * @param[out] error_msg a pointer to a string that will be allocated if there
+ * is an error. This must later be freed by calling \link bs_free_error_msg()
+ * \endlink.
+ * @return code 0 if the memory was handed back; code 1 if the calling
+ * thread has no autodiff memory in this library (it has not calculated
+ * anything with it), so there is nothing to hand back; code 2 if a
+ * calculation is in progress on the calling thread (for example, when this
+ * is called from a print callback), in which case nothing is changed; and
+ * code -1 if the memory could not be handed back (on a system other than
+ * Linux and macOS, or if a system call failed)
+ */
+BS_PUBLIC int bs_release_memory(char** error_msg);
+
+/**
  * Construct an PRNG object to be used in \link bs_param_constrain() \endlink.
  * This object is not thread safe and should be constructed and
  * destructed for each thread.

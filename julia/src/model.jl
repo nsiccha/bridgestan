@@ -792,6 +792,105 @@ function log_density_hessian_vector_product(
 end
 
 """
+    release_memory(sm) -> Vector{Symbol}
+
+Hand the memory that Julia's threads keep for automatic differentiation in the
+model library of `sm` back to the operating system, typically once a fit is over.
+
+Each gradient, Hessian or Hessian-vector product is recorded in the calling
+thread's autodiff memory. Afterwards that memory is emptied but kept for the next
+calculation, so a thread holds the memory of the largest calculation it has done
+with a model library for as long as it lives. Destroying the model and Julia's
+garbage collector do not return it. `release_memory` tells the operating system
+that this memory holds nothing worth keeping, so the system takes its physical
+memory back now. Nothing is freed: the next calculation uses the same memory
+again, and gives the same results.
+
+In a library compiled with `STAN_THREADS` (BridgeStan's default for Julia), each
+thread has its own autodiff memory, and `release_memory` runs on every Julia
+thread, interactive and default. A thread busy with other work runs it once that
+work yields, so `release_memory` waits for it. The result has one entry for each
+Julia thread, by thread id. Without `STAN_THREADS`, one autodiff memory serves
+the whole process: it is released on the calling thread, which must be the only
+one using the library, and the result has a single entry.
+
+Each entry is
+- `:released` if the memory was handed back,
+- `:unused` if the thread has not calculated anything with this library, so it
+  holds no memory there, or
+- `:busy` if a calculation was in progress on the thread (only possible when it
+  calls back into Julia, as a print callback does); nothing is changed then.
+
+Only the model library of `sm` is affected; all models loaded from the same
+library share its memory. On Linux, `release_memory` then also asks the C library
+to return the memory that calculations have freed (`malloc_trim`). Only Linux and
+macOS support this; elsewhere `release_memory` throws an error.
+
+Threads that Julia does not run, such as the worker threads of a model's
+`reduce_sum`, are not reached.
+"""
+function release_memory(sm::StanModel)
+    release = dlsym(sm.lib, :bs_release_memory; throw_error = false)
+    if release === nothing
+        error(
+            "release_memory: the model library has no bs_release_memory; " *
+            "compile it again with a BridgeStan that provides it.",
+        )
+    end
+    outcomes = if occursin("STAN_THREADS=true", model_info(sm))
+        threads = 1:(Threads.nthreads(:interactive)+Threads.nthreads(:default))
+        tasks =
+            [_on_thread(() -> _release_memory_here(release), tid) for tid in threads]
+        # Wait for every thread before reporting any error.
+        [fetch(task) for task in tasks]
+    else
+        [_release_memory_here(release)]
+    end
+    _trim_freed_memory()
+    return [_release_outcome(sm.lib, rc, err) for (rc, err) in outcomes]
+end
+
+function _release_memory_here(release::Ptr{Nothing})
+    err = Ref{Cstring}()
+    rc = @ccall $release(err::Ref{Cstring})::Cint
+    return (rc, err)
+end
+
+function _release_outcome(lib::Ptr{Nothing}, rc::Cint, err::Ref{Cstring})
+    if rc == 0
+        return :released
+    elseif rc == 1
+        return :unused
+    elseif rc == 2
+        return :busy
+    end
+    error(handle_error(lib, err, "release_memory"))
+end
+
+# Run `f()` on Julia thread `tid` (as Base's `@threads :static` pins its tasks).
+function _on_thread(f, tid::Integer)
+    task = Task(f)
+    task.sticky = true
+    if ccall(:jl_set_task_tid, Cint, (Any, Cint), task, tid - 1) != 1
+        error("release_memory: could not run a task on Julia thread $tid")
+    end
+    return schedule(task)
+end
+
+# glibc keeps memory that was freed, such as the storage that the lists of the
+# autodiff memory outgrew, in its heaps until it is asked to return it.
+function _trim_freed_memory()
+    Sys.islinux() || return nothing
+    try
+        ccall(:malloc_trim, Cint, (Csize_t,), 0)
+    catch err
+        # A C library other than glibc (musl) has no malloc_trim.
+        err isa ErrorException || rethrow()
+    end
+    return nothing
+end
+
+"""
     handle_error(lib::Ptr{Nothing}, err::Ref{Cstring}, method::String)
 
 Retrieves the error message allocated in C++ and frees it before returning a copy.
