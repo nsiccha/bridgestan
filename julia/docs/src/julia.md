@@ -24,6 +24,13 @@ The first time you compile a model, the BridgeStan source code for your current 
 will be downloaded to a hidden directory in the users `HOME` directory. If you
 prefer to use a source distribution of BridgeStan, consult the following section.
 
+On the dogfood line (`nsiccha/bridgestan`, branch `dogfood`) that source is the
+line's own, not the release: the commit pinned in `julia/dogfood_source.toml`
+with the Stan and Stan Math commits it pins, downloaded from GitHub to
+`~/.bridgestan/bridgestan-<version>-dogfood-<commit>`. Take the package with
+`BridgeStan = {url = "https://github.com/nsiccha/bridgestan", subdir = "julia", rev = "<commit>"}`
+under `[sources]` in your `Project.toml`.
+
 Note that the system pre-requisites from the [Getting Started guide](../getting-started.rst)
 are still required and will not be automatically installed by this method.
 

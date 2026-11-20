@@ -24,9 +24,10 @@ Return the path the the BridgeStan directory.
 If the environment variable `\$BRIDGESTAN` is set, this will be returned.
 
 If `\$BRIDGESTAN` is not set and `download` is true, this function downloads
-a copy of the BridgeStan source code for the currently installed version under
-a folder called `.bridgestan` in the user's home directory if one is not already
-present.
+the BridgeStan source code this package belongs to under a folder called
+`.bridgestan` in the user's home directory if it is not already present. On the
+dogfood line that is the dogfood commit pinned in `julia/dogfood_source.toml`,
+with the Stan and Stan Math commits it pins, not upstream's release.
 
 See [`set_bridgestan_path!()`](@ref) to set the path from within Julia.
 """
@@ -45,7 +46,8 @@ function get_bridgestan_path(; download::Bool = true)
             end
             println(
                 "BridgeStan not found at location specified by \$BRIDGESTAN " *
-                "environment variable, downloading version $pkg_version to $path",
+                "environment variable, downloading the dogfood source " *
+                "$(first(DOGFOOD_SOURCE["commit"], 12)) to $path",
             )
             get_bridgestan_src()
             num_files = length(readdir(HOME_BRIDGESTAN))

@@ -1,0 +1,20 @@
+# The BridgeStan source this package compiles models against when $BRIDGESTAN is
+# unset (see get_bridgestan_path): the dogfood line's own source, downloaded as
+# GitHub's archives of these exact commits. Upstream's release tarballs do not
+# have the line's changes.
+#
+# `commit` is a dogfood commit whose files outside julia/ are this package's (a
+# commit cannot name itself), and `submodules` are that commit's submodules at
+# the commits it pins. Rewrite them whenever anything outside julia/ changes,
+# for example after rebasing the dogfood line;
+# julia/test/dogfood_source_tests.jl checks them.
+repo = "https://github.com/nsiccha/bridgestan"
+commit = "ea96587609627913db0c81195e4f694863e203f3"
+
+[submodules.stan]
+repo = "https://github.com/stan-dev/stan"
+commit = "a6806ef8477a7b5f65b27449ec33528c162bc024"
+
+[submodules.math]
+repo = "https://github.com/nsiccha/math"
+commit = "74d1813da60169ccf55206f8fcce2fcb2857ad8f"
