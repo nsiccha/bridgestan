@@ -156,9 +156,7 @@ def windows_dll_path_setup() -> None:
         except:
             try:
                 tbb_path = os.path.abspath(
-                    os.path.join(
-                        get_bridgestan_path(), "stan", "lib", "stan_math", "lib", "tbb"
-                    )
+                    os.path.join(get_bridgestan_path(), "math", "lib", "tbb")
                 )
                 os.environ["PATH"] = tbb_path + ";" + os.environ["PATH"]
                 os.add_dll_directory(tbb_path)

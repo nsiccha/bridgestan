@@ -7,7 +7,9 @@ BS_ROOT ?= .
 SRC ?= $(BS_ROOT)/src/
 STAN ?= $(BS_ROOT)/stan/
 STANC ?= $(BS_ROOT)/bin/stanc$(EXE)
-MATH ?= $(STAN)lib/stan_math/
+# Stan Math from our dogfood fork (the `math` submodule), not Stan's own copy
+# under $(STAN)lib/stan_math/
+MATH ?= $(BS_ROOT)/math/
 RAPIDJSON ?= $(STAN)lib/rapidjson_1.1.0/
 
 # required C++ includes

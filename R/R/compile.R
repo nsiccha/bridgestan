@@ -169,14 +169,7 @@ windows_dll_path_setup <- function() {
     if (tbb_found()) {
       assign("WINDOWS_PATH_SET", TRUE, envir = .GlobalEnv)
     } else {
-      tbb_path <- file.path(
-        get_bridgestan_path(),
-        "stan",
-        "lib",
-        "stan_math",
-        "lib",
-        "tbb"
-      )
+      tbb_path <- file.path(get_bridgestan_path(), "math", "lib", "tbb")
       Sys.setenv(PATH = paste(tbb_path, Sys.getenv("PATH"), sep = ";"))
       assign("WINDOWS_PATH_SET", tbb_found(), envir = .GlobalEnv)
     }

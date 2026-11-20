@@ -63,7 +63,7 @@ jobs:
       - name: Set up PATH for C example
         if: matrix.os == 'windows-2022'
         run: |
-          Add-Content $env:GITHUB_PATH "$(pwd)/stan/lib/stan_math/lib/tbb"
+          Add-Content $env:GITHUB_PATH "$(pwd)/math/lib/tbb"
           Add-Content $env:GITHUB_PATH "$(pwd)/test_models/full"
 
       - name: Build C example (Windows)
@@ -312,7 +312,7 @@ jobs:
       - name: Set up TBB
         if: matrix.os == 'windows-2022'
         run: |
-          Add-Content $env:GITHUB_PATH "$(pwd)/stan/lib/stan_math/lib/tbb"
+          Add-Content $env:GITHUB_PATH "$(pwd)/math/lib/tbb"
 
       - name: Run rust tests
         working-directory: ./rust
