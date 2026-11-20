@@ -1,0 +1,131 @@
+{
+  "schema": 1,
+  "line": {
+    "repo": "nsiccha/bridgestan",
+    "ref": "dogfood",
+    "sha": "ea96587609627913db0c81195e4f694863e203f3"
+  },
+  "upstream": {
+    "repo": "roualdes/bridgestan",
+    "ref": "main",
+    "sha": "e65d2ca111b8137b67f38cdd986beb04f729c61a"
+  },
+  "prepared_at": "2026-11-20T11:40:43Z",
+  "problems": [
+    {
+      "id": "stan-math-dogfood",
+      "role": "shared",
+      "title": "Build against the Stan Math dogfood line",
+      "summary": "Dogfood only, never sent upstream. BridgeStan takes Stan Math from the stan submodule (stan/lib/stan_math). This branch adds the submodule math at nsiccha/math dogfood instead and makes it the Makefile's default MATH, so every model library carries that line's fixes, including stan::math::release_memory(). Stan stays at the commit upstream pins. The Windows TBB fallback paths in the wrappers and CI follow it to math/lib/tbb.",
+      "repairs": [],
+      "upstream_refs": [],
+      "fix": {
+        "branch": "dogfood",
+        "commits": [
+          {
+            "sha": "ea96587609627913db0c81195e4f694863e203f3",
+            "title": "Dogfood: build against our Stan Math dogfood (nsiccha/math)",
+            "original": [
+              "ea96587609627913db0c81195e4f694863e203f3"
+            ]
+          }
+        ],
+        "why_together": "One commit: the submodule, the Makefile default and the paths that name Stan Math's directory."
+      },
+      "depends_on": [],
+      "requires": [
+        {
+          "name": "Stan Math dogfood",
+          "repo": "nsiccha/math",
+          "sha": "74d1813da60169ccf55206f8fcce2fcb2857ad8f",
+          "why": "The Stan Math commit the math submodule pins."
+        }
+      ],
+      "validation": []
+    },
+    {
+      "id": "autodiff-memory-release",
+      "role": "fix",
+      "title": "Hand a thread's autodiff memory back to the operating system",
+      "summary": "Stan Math empties a thread's autodiff memory after each calculation but keeps all of it, so a long-lived thread holds the memory of the largest gradient it has computed with a model library for as long as it lives. Destroying the model returns none of it. The C function bs_release_memory() hands the calling thread's memory back to the system (keeping it reserved for the next calculation), and the Julia function release_memory(model) does so on every Julia thread.",
+      "repairs": [],
+      "upstream_refs": [],
+      "fix": {
+        "branch": "dogfood",
+        "commits": [
+          {
+            "sha": "41c34fcfc2750c3b8884bc1690024473b49f4fcc",
+            "title": "Add bs_release_memory() to hand a thread's autodiff memory back to the system",
+            "original": [
+              "41c34fcfc2750c3b8884bc1690024473b49f4fcc"
+            ]
+          }
+        ],
+        "why_together": "One commit: the C function, the Julia wrapper, the test model and the tests. It is based on upstream main, so it applies there unchanged once Stan Math has release_memory()."
+      },
+      "depends_on": [
+        "stan-math-dogfood",
+        "nsiccha/math#tape-memory-release"
+      ],
+      "requires": [
+        {
+          "name": "stan::math::release_memory()",
+          "repo": "nsiccha/math",
+          "sha": "d395313f4e000d8ce4ebab52ecc7cfe126f32e9a",
+          "why": "bs_release_memory() calls it; upstream Stan Math does not have it yet."
+        }
+      ],
+      "validation": [
+        {
+          "base": "e65d2ca111b8137b67f38cdd986beb04f729c61a",
+          "julia": "1.12.7",
+          "native_build": "BridgeStan ea96587609627913db0c81195e4f694863e203f3 (dogfood): Stan 2.40.0 (a6806ef), Stan Math 74d1813da60169ccf55206f8fcce2fcb2857ad8f (nsiccha/math dogfood), stanc3 v2.40.0, Linux x86_64, GCC 15.2.0, STAN_THREADS=true, O=0 (as BridgeStan's CI builds its test models)",
+          "tests": [
+            "julia/test/model_tests.jl",
+            "julia/test/compile_tests.jl"
+          ],
+          "result": "passed",
+          "detail": "model_tests.jl 3136 of 3136 and compile_tests.jl 13 of 13 passed, with julia -t 2 (three Julia threads). One gradient of the ad_memory model kept 45.5 MiB per thread in the process's resident memory, and without a release it stayed there. release_memory took 7 ms on three threads and brought the resident memory back to its level before the gradients (-0.6 MiB). Later gradients were bit-identical. A release requested from a print callback during a gradient was refused (code 2)."
+        },
+        {
+          "base": "e65d2ca111b8137b67f38cdd986beb04f729c61a",
+          "julia": "1.10.12",
+          "native_build": "The same build as the Julia 1.12.7 run.",
+          "tests": [
+            "julia/test/model_tests.jl"
+          ],
+          "result": "passed",
+          "detail": "3136 of 3136 passed, with julia -t 2."
+        },
+        {
+          "base": "e65d2ca111b8137b67f38cdd986beb04f729c61a",
+          "julia": "1.12.7",
+          "native_build": "The ad_memory model built without STAN_THREADS (one autodiff memory per process), otherwise as the Julia 1.12.7 run.",
+          "tests": [],
+          "result": "passed",
+          "detail": "A manual check, not in the suite: release_memory released the process's one autodiff memory once ([:released]). The 44.9 MiB a gradient kept left the resident memory, and the next gradient was bit-identical."
+        },
+        {
+          "base": "e65d2ca111b8137b67f38cdd986beb04f729c61a",
+          "native_build": "The same build as the Julia 1.12.7 run; Rust crate (bindgen over src/bridgestan.h, libclang 21).",
+          "tests": [
+            "rust/tests/loading.rs",
+            "rust/tests/model.rs"
+          ],
+          "result": "passed",
+          "detail": "cargo test: 13 and 8 passed (1 ignored, as upstream), and the doctest. bindgen requires every function of the header in each loaded library, so this also checks that the model libraries export bs_release_memory."
+        },
+        {
+          "base": "e65d2ca111b8137b67f38cdd986beb04f729c61a",
+          "tests": [
+            "julia/test/util_tests.jl",
+            "python/test",
+            "R/tests"
+          ],
+          "result": "not-run",
+          "detail": "Not run: macOS, Windows, the Python and R suites, and julia/test/util_tests.jl (it deletes and re-downloads the shared BridgeStan release under ~/.bridgestan on the test host). The commit adds no platform-specific code; the macOS page release itself was checked natively on the Stan Math line."
+        }
+      ]
+    }
+  ]
+}
