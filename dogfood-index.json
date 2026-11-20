@@ -3,14 +3,14 @@
   "line": {
     "repo": "nsiccha/bridgestan",
     "ref": "dogfood",
-    "sha": "ea96587609627913db0c81195e4f694863e203f3"
+    "sha": "4c25f569aafe9e651db4c62197ad40f5f987ec47"
   },
   "upstream": {
     "repo": "roualdes/bridgestan",
     "ref": "main",
     "sha": "e65d2ca111b8137b67f38cdd986beb04f729c61a"
   },
-  "prepared_at": "2026-11-20T11:40:43Z",
+  "prepared_at": "2026-11-20T13:44:09Z",
   "problems": [
     {
       "id": "stan-math-dogfood",
@@ -124,6 +124,43 @@
           ],
           "result": "not-run",
           "detail": "Not run: macOS, Windows, the Python and R suites, and julia/test/util_tests.jl (it deletes and re-downloads the shared BridgeStan release under ~/.bridgestan on the test host). The commit adds no platform-specific code; the macOS page release itself was checked natively on the Stan Math line."
+        }
+      ]
+    },
+    {
+      "id": "dogfood-source-download",
+      "role": "shared",
+      "title": "Download the dogfood source, not upstream's release",
+      "summary": "Dogfood only, never sent upstream. Without $BRIDGESTAN, BridgeStan.jl compiles against the source it downloads for its version, which upstream takes from its release tarball, so the dogfood Julia package built every model without this branch's changes and release_memory refused those models. This branch pins its source in julia/dogfood_source.toml (the dogfood commit and the stan and math submodule commits it pins) and downloads GitHub's archives of them to ~/.bridgestan/bridgestan-<version>-dogfood-<commit>, so a consumer takes the line with a [sources] entry for the Julia package alone. $BRIDGESTAN still overrides it.",
+      "repairs": [],
+      "upstream_refs": [],
+      "fix": {
+        "branch": "dogfood",
+        "commits": [
+          {
+            "sha": "4c25f569aafe9e651db4c62197ad40f5f987ec47",
+            "title": "Dogfood: compile against the dogfood source by default, not upstream's release",
+            "original": [
+              "4c25f569aafe9e651db4c62197ad40f5f987ec47"
+            ]
+          }
+        ],
+        "why_together": "One commit: the pin, the download, the pin's test and the documentation. It changes only julia/, so the source it pins (its parent) is the package's."
+      },
+      "depends_on": [],
+      "requires": [],
+      "validation": [
+        {
+          "base": "e65d2ca111b8137b67f38cdd986beb04f729c61a",
+          "julia": "1.10.12",
+          "native_build": "The source BridgeStan.jl downloaded without $BRIDGESTAN: BridgeStan ea96587609627913db0c81195e4f694863e203f3 with Stan a6806ef8477a7b5f65b27449ec33528c162bc024 and Stan Math 74d1813da60169ccf55206f8fcce2fcb2857ad8f from GitHub's archives, stanc3 v2.40.0, Linux x86_64, GCC 15.2.0",
+          "tests": [
+            "julia/test/util_tests.jl",
+            "julia/test/compile_tests.jl",
+            "julia/test/dogfood_source_tests.jl"
+          ],
+          "result": "passed",
+          "detail": "With BRIDGESTAN unset: util_tests.jl downloaded the source in 11 s (35 MB of archives) to ~/.bridgestan/bridgestan-2.9.0-dogfood-ea9658760962, whose 21112 files have the blobs of the three pinned trees (the symlink rust/src/bridgestan.h is copied as a file, as upstream's download does). compile_tests.jl 13 of 13 passed against it. A model compiled there exports bs_release_memory and release_memory returned [:released]; the same model compiled by the previous dogfood tip against upstream's 2.9.0 release did not export it and release_memory raised. dogfood_source_tests.jl 5 of 5 passed, and failed on a wrong submodule commit and on a stale pin."
         }
       ]
     }
