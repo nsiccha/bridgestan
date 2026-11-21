@@ -10,7 +10,7 @@
     "ref": "main",
     "sha": "e65d2ca111b8137b67f38cdd986beb04f729c61a"
   },
-  "prepared_at": "2026-11-20T13:44:09Z",
+  "prepared_at": "2026-11-21T05:04:27Z",
   "problems": [
     {
       "id": "stan-math-dogfood",
@@ -49,7 +49,12 @@
       "title": "Hand a thread's autodiff memory back to the operating system",
       "summary": "Stan Math empties a thread's autodiff memory after each calculation but keeps all of it, so a long-lived thread holds the memory of the largest gradient it has computed with a model library for as long as it lives. Destroying the model returns none of it. The C function bs_release_memory() hands the calling thread's memory back to the system (keeping it reserved for the next calculation), and the Julia function release_memory(model) does so on every Julia thread.",
       "repairs": [],
-      "upstream_refs": [],
+      "upstream_refs": [
+        {
+          "url": "https://github.com/roualdes/bridgestan/issues/353",
+          "relation": "reports"
+        }
+      ],
       "fix": {
         "branch": "dogfood",
         "commits": [
